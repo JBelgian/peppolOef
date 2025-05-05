@@ -2,8 +2,12 @@
 // export.php
 
 session_start();
+require 'vendor/autoload.php'; // Ensure Dompdf is installed via Composer
+
+use Dompdf\Dompdf;
+
 $invoices = $_SESSION['invoices'] ?? [];
-$format = $_GET['format'] ?? 'csv';
+$format = $_GET['format'];
 
 if (!isset($invoices) || empty($invoices)) {
     die('No invoices available for export.');
@@ -36,32 +40,46 @@ if (isset($format) && $format === 'csv') {
 }
 
 if ($format === 'pdf') {
-    require_once __DIR__ . '/lib/fpdf.php';
+    // PDF Export Logic
+    $dompdf = new Dompdf();
 
-    $pdf = new FPDF();
-    $pdf->AddPage();
-    $pdf->SetFont('Arial', 'B', 14);
-    $pdf->Cell(0, 10, 'Invoice Summary', 0, 1, 'C');
-
-    $pdf->SetFont('Arial', 'B', 10);
-    $headers = ['Number', 'Date', 'Customer', 'Supplier', 'Total', 'Currency'];
-    foreach ($headers as $header) {
-        $pdf->Cell(32, 10, $header, 1);
+    // Generate the HTML for the PDF
+    $html = '<h1>Invoice Overview</h1>';
+    $html .= '<table border="1" cellpadding="5" cellspacing="0" style="width: 100%; border-collapse: collapse;">';
+    $html .= '<thead>
+                <tr>
+                    <th>Invoice Number</th>
+                    <th>Issue Date</th>
+                    <th>Customer Name</th>
+                    <th>Amount excl. Tax</th>
+                    <th>Tax Amount</th>
+                    <th>Total Amount</th>
+                </tr>
+              </thead>';
+    $html .= '<tbody>';
+    foreach ($invoices as $invoice) {
+        $html .= '<tr>
+                    <td>' . htmlspecialchars($invoice['number']) . '</td>
+                    <td>' . htmlspecialchars($invoice['date']) . '</td>
+                    <td>' . htmlspecialchars($invoice['customer']) . '</td>
+                    <td>€' . htmlspecialchars($invoice['exclTax']) . '</td>
+                    <td>€' . htmlspecialchars($invoice['tax']) . '</td>
+                    <td>€' . htmlspecialchars($invoice['total']) . '</td>
+                  </tr>';
     }
-    $pdf->Ln();
+    $html .= '</tbody></table>';
 
-    $pdf->SetFont('Arial', '', 10);
-    foreach ($invoices as $inv) {
-        $pdf->Cell(32, 10, $inv['number'], 1);
-        $pdf->Cell(32, 10, $inv['date'], 1);
-        $pdf->Cell(32, 10, $inv['customer'], 1);
-        $pdf->Cell(32, 10, $inv['supplier'], 1);
-        $pdf->Cell(32, 10, $inv['total'], 1);
-        $pdf->Cell(32, 10, $inv['currency'], 1);
-        $pdf->Ln();
-    }
+    // Load the HTML into Dompdf
+    $dompdf->loadHtml($html);
 
-    $pdf->Output();
+    // Set paper size and orientation
+    $dompdf->setPaper('A4', 'portrait');
+
+    // Render the PDF
+    $dompdf->render();
+
+    // Output the PDF for download
+    $dompdf->stream('invoices.pdf', ['Attachment' => true]);
     exit;
 }
 
